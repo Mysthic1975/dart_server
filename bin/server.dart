@@ -1,28 +1,58 @@
-import 'package:postgres/postgres.dart';
+import 'dart:convert';
+import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
+import 'package:postgresql2/pool.dart';
+import 'package:shelf/shelf_io.dart' as io;
 
-void main() async {
-  final conn = await Connection.open(
-    Endpoint(
-      host: 'localhost',
-      port: 5433,
-      database: 'postgres',
-      username: 'postgres',
-      password: 'admin',
-    ),
-    settings: const ConnectionSettings(sslMode: SslMode.disable),
-  );
+class Server {
+  final Router _router;
+  final Pool _pool;
 
-  print('Verbindung erfolgreich hergestellt.');
+  Server(this._pool)
+      : _router = Router() {
+    _router.get('/data', _handleGetData);
+    _router.post('/data', _handlePostData);
+    _router.delete('/data/<id>', _handleDeleteData);
+  }
 
-  // Führen Sie hier Ihre Datenbankoperationen aus
+  Handler get handler => _router.call;
 
-  // Erstellen Sie eine Tabelle
-  await conn.execute('CREATE TABLE test (id serial PRIMARY KEY, content varchar);');
+  Future<Response> _handleGetData(Request request) async {
+    // Hier holen Sie die Daten aus der Datenbank
+    // und senden sie als Antwort zurück
+    // ...
+    return Response.ok(jsonEncode({'data': 'data'}));
+  }
 
-  // Fügen Sie Daten in die Tabelle ein
-  await conn.execute("INSERT INTO test (content) VALUES ('Test; 1234');");
+  Future<Response> _handlePostData(Request request) async {
+    // Hier nehmen Sie die Daten aus der Anfrage,
+    // fügen sie in die Datenbank ein
+    // und senden eine Bestätigungsantwort zurück
+    // ...
+    return Response.ok(jsonEncode({'result': 'success'}));
+  }
 
-  print('Datenbankoperationen erfolgreich ausgeführt.');
+  Future<Response> _handleDeleteData(Request request, String id) async {
+    // Hier nehmen Sie die ID aus der Anfrage,
+    // löschen den entsprechenden Datensatz aus der Datenbank
+    // und senden eine Bestätigungsantwort zurück
+    // ...
+    return Response.ok(jsonEncode({'result': 'success'}));
+  }
+}
 
-  await conn.close();
+void main() {
+  var uri = 'postgres://postgres:admin@localhost:5433/postgres';
+  var pool = Pool(uri, minConnections: 2, maxConnections: 5);
+  pool.messages.listen(print);
+  pool.start().then((_) {
+    print('Min connections established.');
+
+    final server = Server(pool);
+
+    // Starten Sie den Server und hören Sie auf Port 8080
+    io.serve(server.handler, 'localhost', 8080).then((server) {
+      print('Serving at http://${server.address.host}:${server.port}');
+    });
+  });
 }
